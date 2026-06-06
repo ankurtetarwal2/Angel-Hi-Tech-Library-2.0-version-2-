@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seat Management — Library</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #181c27;
+      --border: #2a2f3e;
+      --accent: #c8a96e;
+      --avail-bg: #1a2e1a;
+      --avail-bd: #3a6a3a;
+      --avail-tx: #7ec87e;
+      --occup-bg: #2e1a1a;
+      --occup-bd: #8a3030;
+      --occup-tx: #e07070;
+      --expir-bg: #2b2200;
+      --expir-bd: #a06a00;
+      --expir-tx: #f0a830;
+      --text: #e0ddd6;
+      --muted: #6b7280;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+    }
+
+    body {
+      padding: 24px 20px 56px;
+      overflow-y: auto;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(200,169,110,.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; flex-wrap: wrap;
+      gap: 16px; margin-bottom: 28px;
+    }
+    .brand-label { font-size: 10px; letter-spacing: .25em; color: var(--accent); text-transform: uppercase; }
+    .brand-title { font-family: 'Playfair Display', serif; font-size: 26px; line-height: 1.1; margin: 4px 0; }
+    .admin-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px;
+      background: rgba(200,169,110,.1); border: 1px solid rgba(200,169,110,.3);
+      border-radius: 2px; font-size: 10px; letter-spacing: .2em;
+      color: var(--accent); text-transform: uppercase; margin-top: 6px;
+    }
+    .dot {
+      width: 6px; height: 6px; background: var(--accent); border-radius: 50%;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    /* ── STATS ── */
+    .stats-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat {
+      padding: 10px 18px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 4px;
+      display: flex; flex-direction: column; gap: 2px; min-width: 88px;
+    }
+    .stat-num { font-size: 22px; font-weight: 500; line-height: 1; }
+    .stat-label { font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+    .s-total .stat-num { color: var(--accent); }
+    .s-avail .stat-num { color: var(--avail-tx); }
+    .s-occup .stat-num { color: var(--occup-tx); }
+    .s-expir .stat-num { color: var(--expir-tx); }
+
+    /* ── CONTROLS ── */
+    .controls {
+      display: flex; align-items: center;
+      gap: 10px; flex-wrap: wrap; margin-bottom: 24px;
+    }
+    .legend { display: flex; gap: 16px; flex: 1; flex-wrap: wrap; align-items: center; }
+    .leg-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+    .leg-box { width: 14px; height: 14px; border-radius: 2px; border: 1.5px solid; }
+    .leg-box.a { background: var(--avail-bg); border-color: var(--avail-bd); }
+    .leg-box.o { background: var(--occup-bg); border-color: var(--occup-bd); }
+    .leg-box.e { background: var(--expir-bg); border-color: var(--expir-bd); }
+
+    .btn {
+      padding: 8px 16px; border-radius: 3px;
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      letter-spacing: .1em; cursor: pointer; border: 1px solid;
+      transition: all .15s; text-transform: uppercase;
+    }
+    .btn-save { background: rgba(200,169,110,.1); border-color: var(--accent); color: var(--accent); }
+    .btn-save:hover { background: rgba(200,169,110,.2); }
+    .btn-save:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-reload { background: rgba(126,200,126,.07); border-color: var(--avail-bd); color: var(--avail-tx); }
+    .btn-reload:hover { background: rgba(126,200,126,.15); }
+
+    /* ── FLOOR PLAN ── */
+    .fp-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 20px 16px 40px; overflow-x: auto;
+    }
+    .fp-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
+
+    .room {
+      display: grid;
+      grid-template-columns: 44px 1fr 44px;
+      grid-template-rows: auto 16px auto 16px auto 56px auto 32px;
+      min-width: 680px;
+      border: 2px solid var(--border); border-radius: 4px; padding: 14px 0;
+    }
+
+    .ac {
+      display: flex; align-items: center; justify-content: center;
+      writing-mode: vertical-rl; font-size: 9px; letter-spacing: .12em;
+      text-transform: uppercase; color: rgba(200,169,110,.55);
+      background: rgba(200,169,110,.07); border: 1px solid rgba(200,169,110,.2);
+      border-radius: 3px; margin: 3px 5px;
+    }
+    .ac-left { grid-column:1; grid-row:3; }
+    .ac-right{ grid-column:3; grid-row:5; }
+    .c2 { grid-column:2; }
+    .r1{grid-row:1} .r3{grid-row:3} .r5{grid-row:5} .r7{grid-row:7}
+
+    .door-wrap { grid-column:1/4; grid-row:8; display:flex; justify-content:center; align-items:flex-end; padding-bottom:4px; }
+    .door { width:42px; height:14px; border:2px solid var(--accent); border-top:none; border-radius:0 0 4px 4px; position:relative; }
+    .door::after { content:'ENTRY'; position:absolute; bottom:-20px; left:50%; transform:translateX(-50%); font-size:8px; letter-spacing:.2em; color:var(--accent); white-space:nowrap; }
+
+    .seat-row { display:flex; gap:5px; align-items:center; justify-content:center; padding:0 14px; flex-wrap:wrap; }
+    .seat-row .mid-gap { flex:1; }
+    .dbl { display:flex; align-items:center; padding:0 14px; }
+    .dbl .mid-gap { flex:1; min-width:52px; }
+
+    .cluster { display:flex; flex-direction:column; gap:5px; border:1.5px solid rgba(255,255,255,.07); border-radius:4px; padding:8px 9px; }
+    .cl-row { display:flex; gap:5px; }
+
+    .seat {
+      width:52px; height:46px; border-radius:3px;
+      border:1.5px solid var(--avail-bd); background:var(--avail-bg); color:var(--avail-tx);
+      font-family:'DM Mono',monospace; font-size:13px; font-weight:500;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      transition: transform .15s, box-shadow .15s, border-color .15s, background .15s, color .15s;
+      flex-shrink:0; user-select:none; padding:0; position:relative;
+    }
+    .seat:hover { transform:translateY(-2px); box-shadow:0 5px 14px rgba(0,0,0,.45); border-color:#4caf50; color:#4caf50; }
+    .seat.occupied { background:var(--occup-bg); border-color:var(--occup-bd); color:var(--occup-tx); box-shadow:0 0 8px rgba(220,80,80,.18); }
+    .seat.occupied:hover { transform:translateY(-2px); border-color:#e07070; box-shadow:0 5px 14px rgba(224,96,96,.35); }
+    .seat.expiring { background:var(--expir-bg); border-color:var(--expir-bd); color:var(--expir-tx); box-shadow:0 0 10px rgba(240,168,48,.22); animation: pulse-expir 2.2s ease-in-out infinite; }
+    .seat.expiring:hover { transform:translateY(-2px); border-color:#f0a830; box-shadow:0 5px 14px rgba(240,168,48,.4); }
+    @keyframes pulse-expir { 0%,100%{ box-shadow:0 0 6px rgba(240,168,48,.2); } 50%{ box-shadow:0 0 16px rgba(240,168,48,.5); } }
+    .seat.saving { opacity:.5; cursor:wait; pointer-events:none; }
+
+    /* ── MEMBER POPUP ── */
+    .popup-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.6);
+      display:flex; align-items:center; justify-content:center;
+      z-index:300; opacity:0; pointer-events:none;
+      transition: opacity .2s;
+    }
+    .popup-overlay.show { opacity:1; pointer-events:all; }
+    .popup {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:6px; padding:24px 28px; min-width:300px; max-width:440px; width:90%;
+      transform: translateY(20px); transition: transform .2s;
+      position:relative;
+    }
+    .popup-overlay.show .popup { transform:translateY(0); }
+    .popup-close {
+      position:absolute; top:12px; right:14px;
+      background:none; border:none; color:var(--muted);
+      font-size:18px; cursor:pointer; line-height:1;
+    }
+    .popup-close:hover { color:var(--text); }
+    .popup-seat-no {
+      font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent);
+      margin-bottom:6px;
+    }
+    .popup-name { font-family:'Playfair Display',serif; font-size:20px; margin-bottom:16px; }
+    .popup-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; }
+    .popup-field label { font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:2px; }
+    .popup-field span { font-size:12px; color:var(--text); }
+    .popup-status-avail { color:var(--avail-tx); }
+    .popup-status-occup { color:var(--occup-tx); }
+    .popup-status-expir { color:var(--expir-tx); font-weight:500; }
+    .popup-divider { grid-column:1/3; border:none; border-top:1px solid var(--border); margin:4px 0; }
+    .popup-actions { display:flex; gap:8px; margin-top:18px; }
+    .btn-mark-occup { background:rgba(220,80,80,.1); border-color:var(--occup-bd); color:var(--occup-tx); flex:1; }
+    .btn-mark-occup:hover { background:rgba(220,80,80,.2); }
+    .btn-mark-avail { background:rgba(60,180,60,.1); border-color:var(--avail-bd); color:var(--avail-tx); flex:1; }
+    .btn-mark-avail:hover { background:rgba(60,180,60,.2); }
+
+    /* ── TOAST ── */
+    .toast {
+      position:fixed; bottom:28px; right:28px;
+      padding:12px 20px; background:var(--surface);
+      border:1px solid #4caf50; border-radius:4px;
+      font-size:12px; color:#4caf50;
+      box-shadow:0 8px 24px rgba(0,0,0,.5);
+      transform:translateY(70px); opacity:0;
+      transition:all .3s; z-index:400; pointer-events:none;
+    }
+    .toast.show { transform:translateY(0); opacity:1; }
+    .toast.error { border-color:var(--occup-bd); color:var(--occup-tx); }
+
+    /* ── TOOLTIP ── */
+    .tip {
+      position:fixed; padding:7px 12px;
+      background:#1e2235; border:1px solid var(--border);
+      border-radius:4px; font-size:11px; color:var(--text);
+      pointer-events:none; z-index:200; display:none;
+      white-space:nowrap; box-shadow:0 4px 16px rgba(0,0,0,.5);
+    }
+
+    /* ── LOADING OVERLAY ── */
+    .loading-bar {
+      position:fixed; top:0; left:0; height:2px;
+      background:var(--accent); width:0%;
+      transition: width .4s; z-index:500;
+    }
+    .loading-bar.active { width:70%; }
+    .loading-bar.done { width:100%; transition:width .2s; }
+  </style>
+</head>
+<body>
+
+<!-- Loading bar -->
+<div class="loading-bar" id="loadingBar"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="brand">
+    <div class="brand-label">Admin Panel</div>
+    <div class="brand-title">Library Seat<br>Management</div>
+    <div class="admin-badge"><span class="dot"></span> Admin Access</div>
+  </div>
+  <div class="stats-row">
+    <div class="stat s-total"><span class="stat-num" id="s-total">72</span><span class="stat-label">Total</span></div>
+    <div class="stat s-avail"><span class="stat-num" id="s-avail">—</span><span class="stat-label">Available</span></div>
+    <div class="stat s-occup"><span class="stat-num" id="s-occup">—</span><span class="stat-label">Occupied</span></div>
+    <div class="stat s-expir"><span class="stat-num" id="s-expir">—</span><span class="stat-label">Expiring Soon</span></div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="legend">
+    <div class="leg-item"><span class="leg-box a"></span> Available</div>
+    <div class="leg-item"><span class="leg-box o"></span> Occupied</div>
+    <div class="leg-item"><span class="leg-box e"></span> Expiring ≤7 days</div>
+  </div>
+  <button class="btn btn-reload" onclick="loadSeats()">↻ Refresh</button>
+</div>
+
+<!-- Floor Plan -->
+<div class="fp-wrap">
+  <div class="fp-label">// Ground Floor — Reading Hall</div>
+  <div class="room">
+    <div class="ac ac-left">A.C</div>
+    <div class="ac ac-right">A.C</div>
+    <div class="c2 r1"><div class="seat-row" id="rt"></div></div>
+    <div class="c2 r3"><div class="dbl" id="mu"></div></div>
+    <div class="c2 r5"><div class="dbl" id="ml"></div></div>
+    <div class="c2 r7"><div class="seat-row" id="rb"></div></div>
+    <div class="door-wrap"><div class="door"></div></div>
+  </div>
+</div>
+
+<!-- Member Popup -->
+<div class="popup-overlay" id="popupOverlay" onclick="closePopup(event)">
+  <div class="popup">
+    <button class="popup-close" onclick="hidePopup()">✕</button>
+    <div class="popup-seat-no" id="popupSeatNo">SEAT —</div>
+    <div class="popup-name" id="popupName">—</div>
+    <div class="popup-grid" id="popupGrid"></div>
+    <div class="popup-actions" id="popupActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="tip" id="tip"></div>
+
+<script>
+  // ── CONFIG ──────────────────────────────────────────────
+  const API = 'http://localhost:3000'; // Change if your server runs elsewhere
+  const TOTAL = 72;
+
+  // Local state: seat_no → member object (or null if available)
+  const seatData = {}; // { seatNo: memberObj | null }
+  let currentSeat = null;
+
+  // ── LOADING BAR ─────────────────────────────────────────
+  function startLoad() { const b = document.getElementById('loadingBar'); b.className='loading-bar active'; }
+  function endLoad()   { const b = document.getElementById('loadingBar'); b.className='loading-bar done'; setTimeout(()=>b.className='loading-bar',400); }
+
+  // ── FETCH MEMBERS FROM DB ───────────────────────────────
+  async function loadSeats() {
+    startLoad();
+    try {
+      const res = await fetch(`${API}/members`);
+      if (!res.ok) throw new Error('Server error');
+      const members = await res.json();
+
+      // Reset
+      for (let i = 1; i <= TOTAL; i++) seatData[i] = null;
+
+      // Map members to their seat_no
+      members.forEach(m => {
+        const s = parseInt(m.seat_no);
+        if (s >= 1 && s <= TOTAL) seatData[s] = m;
+      });
+
+      renderAll();
+      updateStats();
+    } catch (e) {
+      toast('Could not connect to server', true);
+      console.error(e);
+    }
+    endLoad();
+  }
+
+  // ── BUILD FLOOR PLAN ────────────────────────────────────
+  function mkSeat(n) {
+    const b = document.createElement('button');
+    b.id = `seat-${n}`;
+    b.className = 'seat' + (seatData[n] ? ' occupied' : '');
+    b.textContent = n;
+    b.dataset.n = n;
+    b.onclick    = () => openPopup(n);
+    b.onmouseenter = e => showTip(e, n);
+    b.onmouseleave = hideTip;
+    return b;
+  }
+
+  function gap(flex=1, minW=52) {
+    const d = document.createElement('div');
+    d.className = 'mid-gap';
+    d.style.cssText = `flex:${flex};min-width:${minW}px`;
+    return d;
+  }
+
+  function mkCluster(rows) {
+    const c = document.createElement('div');
+    c.className = 'cluster';
+    rows.forEach(nums => {
+      const r = document.createElement('div');
+      r.className = 'cl-row';
+      nums.forEach(n => r.appendChild(mkSeat(n)));
+      c.appendChild(r);
+    });
+    return c;
+  }
+
+  function build() {
+    const rt = document.getElementById('rt');
+    [61,62,63,64,65,66,67,68,69,70,71,72].forEach(n => rt.appendChild(mkSeat(n)));
+
+    const mu = document.getElementById('mu');
+    mu.appendChild(mkCluster([[60,59,58,57,56,55],[37,38,39,40,41,42]]));
+    mu.appendChild(gap());
+    mu.appendChild(mkCluster([[54,53,52,51,50,49],[43,44,45,46,47,48]]));
+
+    const ml = document.getElementById('ml');
+    ml.appendChild(mkCluster([[36,35,34,33,32,31],[13,14,15,16,17,18]]));
+    ml.appendChild(gap());
+    ml.appendChild(mkCluster([[30,29,28,27,26,25],[19,20,21,22,23,24]]));
+
+    const rb = document.getElementById('rb');
+    [12,11,10,9,8,7].forEach(n => rb.appendChild(mkSeat(n)));
+    rb.appendChild(gap());
+    [1,2,3,4,5,6].forEach(n => rb.appendChild(mkSeat(n)));
+  }
+
+  // ── EXPIRY HELPER ────────────────────────────────────────
+  function daysUntilDue(due_date) {
+    if (!due_date) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const due   = new Date(due_date); due.setHours(0,0,0,0);
+    return Math.round((due - today) / 86400000); // +ve = days left, -ve = overdue
+  }
+
+  // Re-render occupied/available state on all existing seat buttons
+  function renderAll() {
+    for (let i = 1; i <= TOTAL; i++) {
+      const btn = document.getElementById(`seat-${i}`);
+      if (!btn) continue;
+      const m = seatData[i];
+      btn.classList.remove('occupied', 'expiring');
+      if (m) {
+        const days = daysUntilDue(m.due_date);
+        if (!m._manual && days !== null && days <= 7) {
+          btn.classList.add('expiring');
+        } else {
+          btn.classList.add('occupied');
+        }
+      }
+    }
+  }
+
+  // ── STATS ───────────────────────────────────────────────
+  function updateStats() {
+    let occ = 0, expir = 0;
+    for (let i = 1; i <= TOTAL; i++) {
+      const m = seatData[i];
+      if (!m) continue;
+      const days = daysUntilDue(m.due_date);
+      if (!m._manual && days !== null && days <= 7) expir++;
+      else occ++;
+    }
+    document.getElementById('s-occup').textContent = occ;
+    document.getElementById('s-expir').textContent = expir;
+    document.getElementById('s-avail').textContent = TOTAL - occ - expir;
+  }
+
+  // ── POPUP ───────────────────────────────────────────────
+  function openPopup(n) {
+    currentSeat = n;
+    const m = seatData[n];
+    const overlay = document.getElementById('popupOverlay');
+
+    document.getElementById('popupSeatNo').textContent = `SEAT ${n}`;
+
+    const grid = document.getElementById('popupGrid');
+    const actions = document.getElementById('popupActions');
+    grid.innerHTML = '';
+    actions.innerHTML = '';
+
+    if (m) {
+      // Occupied — show member details
+      document.getElementById('popupName').textContent =
+        `${m.first_name || ''} ${m.last_name || ''}`.trim() || '—';
+
+      const fields = [
+        ['Library ID',  m.library_id],
+        ['Contact',     m.contact],
+        ['Plan',        m.membership_plan],
+        ['Goal',        m.goal],
+        ['Due Date',    m.due_date ? new Date(m.due_date).toLocaleDateString('en-IN') : '—'],
+        ['Status',      m.account_status],
+      ];
+      fields.forEach(([label, val]) => {
+        const div = document.createElement('div');
+        div.className = 'popup-field';
+        div.innerHTML = `<label>${label}</label><span>${val || '—'}</span>`;
+        grid.appendChild(div);
+      });
+
+      // Expiry warning row
+      const days = daysUntilDue(m.due_date);
+      if (!m._manual && days !== null && days <= 7) {
+        const warn = document.createElement('div');
+        warn.className = 'popup-field';
+        warn.style.gridColumn = '1/3';
+        const msg = days < 0
+          ? `⚠ Membership overdue by ${Math.abs(days)} day${Math.abs(days)!==1?'s':''}!`
+          : days === 0
+            ? '⚠ Membership expires TODAY!'
+            : `⚠ Expires in ${days} day${days!==1?'s':''}`;
+        warn.innerHTML = `<label>Renewal Alert</label><span class="popup-status-expir">${msg}</span>`;
+        grid.appendChild(warn);
+      }
+
+      const hr = document.createElement('hr');
+      hr.className = 'popup-divider';
+      grid.appendChild(hr);
+
+      // Action: Mark as Available (manually free the seat — does NOT delete member)
+      const btnFree = document.createElement('button');
+      btnFree.className = 'btn btn-mark-avail';
+      btnFree.textContent = '✓ Mark Available';
+      btnFree.onclick = () => markAvailable(n, m.library_id);
+      actions.appendChild(btnFree);
+
+    } else {
+      // Available
+      document.getElementById('popupName').textContent = 'Available';
+      const div = document.createElement('div');
+      div.className = 'popup-field';
+      div.innerHTML = `<label>Status</label><span class="popup-status-avail">🟢 Free — no member assigned</span>`;
+      grid.appendChild(div);
+
+      // Action: Mark as Occupied manually (no member)
+      const btnOcc = document.createElement('button');
+      btnOcc.className = 'btn btn-mark-occup';
+      btnOcc.textContent = '✕ Mark Occupied';
+      btnOcc.onclick = () => markOccupied(n);
+      actions.appendChild(btnOcc);
+    }
+
+    overlay.classList.add('show');
+  }
+
+  function hidePopup() {
+    document.getElementById('popupOverlay').classList.remove('show');
+    currentSeat = null;
+  }
+
+  function closePopup(e) {
+    if (e.target === document.getElementById('popupOverlay')) hidePopup();
+  }
+
+  // ── SEAT ACTIONS ─────────────────────────────────────────
+
+  // Mark a seat occupied manually (stores a placeholder in the seats table)
+  async function markOccupied(n) {
+    hidePopup();
+    const btn = document.getElementById(`seat-${n}`);
+    btn.classList.add('saving');
+    try {
+      const res = await fetch(`${API}/seat-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seat_no: n, status: 'occupied' })
+      });
+      if (!res.ok) throw new Error();
+      // Store a placeholder so renderAll knows it's occupied
+      seatData[n] = { seat_no: n, _manual: true };
+      btn.classList.add('occupied');
+      updateStats();
+      toast(`Seat ${n} marked Occupied`);
+    } catch {
+      toast('Failed to update seat', true);
+    }
+    btn.classList.remove('saving');
+  }
+
+  // Mark a seat available — clears manual override
+  async function markAvailable(n, library_id) {
+    hidePopup();
+    const btn = document.getElementById(`seat-${n}`);
+    btn.classList.add('saving');
+    try {
+      const res = await fetch(`${API}/seat-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seat_no: n, status: 'available' })
+      });
+      if (!res.ok) throw new Error();
+      seatData[n] = null;
+      btn.classList.remove('occupied');
+      updateStats();
+      toast(`Seat ${n} marked Available`);
+    } catch {
+      toast('Failed to update seat', true);
+    }
+    btn.classList.remove('saving');
+  }
+
+  // ── TOAST ───────────────────────────────────────────────
+  let tmr;
+  function toast(msg, isError=false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(tmr);
+    tmr = setTimeout(() => t.className = 'toast', 2400);
+  }
+
+  // ── TOOLTIP ─────────────────────────────────────────────
+  const tipEl = document.getElementById('tip');
+  function showTip(e, n) {
+    const m = seatData[n];
+    if (m && !m._manual) {
+      const days = daysUntilDue(m.due_date);
+      let expTag = '';
+      if (days !== null && days <= 7) {
+        expTag = days < 0 ? ` ⚠ Overdue ${Math.abs(days)}d` : ` ⚠ ${days}d left`;
+      }
+      tipEl.textContent = `Seat ${n} — 🔴 ${m.first_name} ${m.last_name}${expTag}`;
+    } else if (m && m._manual) {
+      tipEl.textContent = `Seat ${n} — 🔴 Manually Occupied`;
+    } else {
+      tipEl.textContent = `Seat ${n} — 🟢 Available`;
+    }
+    tipEl.style.display = 'block';
+    moveTip(e);
+  }
+  document.addEventListener('mousemove', moveTip);
+  function moveTip(e) {
+    if (tipEl.style.display === 'none') return;
+    tipEl.style.left = (e.clientX + 14) + 'px';
+    tipEl.style.top  = (e.clientY - 34) + 'px';
+  }
+  function hideTip() { tipEl.style.display = 'none'; }
+
+  // ── INIT ─────────────────────────────────────────────────
+  build();
+  loadSeats();
+</script>
+</body>
+</html>
